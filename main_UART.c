@@ -10,7 +10,7 @@
  * 
  * Author: Nicholas J. Conn - http://msp430launchpad.com
  * Email: webmaster at msp430launchpad.com
- * Date: 07-25-10
+ * Date: 08-17-10
  ******************************************************************************/
   
 #include	"msp430g2231.h"
