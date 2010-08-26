@@ -70,7 +70,6 @@ void main(void)
 void Transmit()
 { 
 	while(isReceiving);			// Wait for RX completion
-  	while ( CCTL0 & CCIE );			// Wait for previous TX completion
   	CCTL0 = OUT;				// TXD Idle as Mark
   	TACTL = TASSEL_2 + MC_2;		// SMCLK, continuous mode
 
@@ -82,6 +81,7 @@ void Transmit()
   	TXByte = TXByte << 1;			// Add start bit (which is logical 0)
   
   	CCTL0 =  CCIS0 + OUTMOD0 + CCIE;	// Set signal, intial value, enable interrupts
+  	while ( CCTL0 & CCIE );			// Wait for previous TX completion
 }
 
 // Port 1 interrupt service routine
