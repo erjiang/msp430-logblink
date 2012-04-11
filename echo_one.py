@@ -2,7 +2,7 @@ import serial
 import time
 
 print "Setting up port"
-port=serial.Serial('/dev/ttyACM0',2400)
+port=serial.Serial('/dev/ttyACM0',9600)
 sample_rate=1 #update every 10s
 while 1:
     now=time.time()
