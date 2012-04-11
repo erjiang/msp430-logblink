@@ -41,8 +41,9 @@ int main(void)
 	BCSCTL1 = CALBC1_1MHZ;			// Set range
 	DCOCTL = CALDCO_1MHZ;			// SMCLK = DCO = 1MHz  
 
-	P1SEL |= TXD;
+	//P1SEL |= TXD;
 	P1DIR |= TXD;
+    P1OUT |= TXD;
 
     // setup LED1 and LED2
     P1DIR |= BIT0 | BIT3 | BIT4 | BIT5 | BIT7 | BIT6;
@@ -135,7 +136,7 @@ void message_handler(unsigned int msg) {
                 TXByte = 'x';
                 break;
         }
-        Transmit();
+        //Transmit();
         position = 0;
     }
 }
@@ -144,6 +145,7 @@ void message_handler(unsigned int msg) {
 void Transmit()
 { 
 	while(isReceiving);			// Wait for RX completion
+    P1SEL |= TXD;
   	CCTL0 = OUT;				// TXD Idle as Mark
   	TACTL = TASSEL_2 + MC_2;		// SMCLK, continuous mode
 
@@ -156,6 +158,7 @@ void Transmit()
   
   	CCTL0 =  CCIS0 + OUTMOD0 + CCIE;	// Set signal, intial value, enable interrupts
   	while ( CCTL0 & CCIE );			// Wait for previous TX completion
+    P1SEL &= ~TXD;
 }
 
 // Port 1 interrupt service routine
