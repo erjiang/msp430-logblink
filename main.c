@@ -16,14 +16,15 @@
 #define true 1
 
 // conditions for 9600/4=2400 Baud SW UART, SMCLK=1MHz
-#define TIME_HALF_BIT 26 // almost a half bit
-#define TIME_BIT      52
+#define TIME_HALF_BIT 5*4 // almost a half bit
+#define TIME_BIT      13*4
 
 int isReceiving;
 int hasReceived;
 unsigned int RXByte;
-unsigned int TXByte;
+//unsigned int TXByte;
 unsigned char BitCnt;
+void ConfigureTimerUart(void);
 
 void Transmit(void);
 static void __inline__ delay(register unsigned int n);
@@ -33,10 +34,12 @@ inline void ConfigureTimer(void)
     // stop WDT
     WDTCTL = WDTPW + WDTHOLD;
 
-    // set range
+    /* Set range */
     BCSCTL1 = CALBC1_1MHZ;
-    // SMCLK = DCO = 1MHz
     DCOCTL = CALDCO_1MHZ;
+
+    /* SMCLK = DCO / 8 = 1MHz */
+    BCSCTL2 &= ~(DIVS_3);
 
     /* Configure TimerA0 UART TX */
 //    timerMode = TIMER_UART_MODE;
@@ -44,7 +47,9 @@ inline void ConfigureTimer(void)
     // set TimerA to use sub-main clock
     // (SMCLK) as its clock source.
     // Set TimerA to count in continuous mode
-    TACTL = TASSEL_2 | MC_2;
+    
+    // don't start timer yet
+    //TACTL = TASSEL_2 | MC_2;
 
     CCTL0 = CCIE;
 }
@@ -54,40 +59,52 @@ int main(void) {
     ConfigureTimer();
 
     // setup lights
-    P1DIR |= LED1 | LED2;
-    P1OUT &= ~(LED1 | LED2);
-    P1OUT ^= LED2;
+    P1DIR |= LED1 | LED2 | BIT7;
+    P1OUT &= ~(LED1 | LED2 | BIT7);
 
     // setup output pins
-    P1SEL |= TXD + RXD;
-    P1DIR |= TXD;
+    //P1SEL |= TXD + RXD;
+    //P1DIR |= TXD;
 
     // set up pins
-    P1SEL |= TXD;
+    //P1SEL |= TXD;
+    P1OUT |= TXD; // set tx to high (idle)
     P1DIR |= TXD;
 
-    // interrupt on recv Hi->Lo edge
+    // interrupt on recv Hi->Lo edge by setting RXD's bit to 1
+    // (0 is rising edge)
+    P1DIR &= ~RXD;
     P1IES |= RXD;
     // clear RXD (flag) before enabling interrupt
     P1IFG &= ~RXD;
     P1IE |= RXD;
+
+    P1IES |= BIT3;
+    P1IFG &= ~BIT3;
+    P1IE |= BIT3;
 
     // initial states
     isReceiving = false;
     hasReceived = false;
 
     // interrupts enabled
+    __enable_interrupt();
     __bis_SR_register(GIE);
 
-    TXByte = 'R';
-    Transmit();
+//    TXByte = 'R';
+//    Transmit();
+
+    //ConfigureTimerUart();
 
     while(1) {
         if(hasReceived) {
-            P2OUT ^= LED2;
+            P1OUT ^= LED2;
             hasReceived = false;
-            TXByte = RXByte-1;
-            Transmit();
+            if(RXByte == 'y') {
+                P1OUT |= BIT7;
+            }
+           // TXByte = RXByte-1;
+           // Transmit();
         }
         /*
         if(~hasReceived) {
@@ -97,6 +114,12 @@ int main(void) {
         */
     }
 }
+void ConfigureTimerUart(void)
+{
+    /* TXD Idle as Mark, SMCLK/8, continuous mode */
+    CCTL0 = OUT;
+    TACTL = TASSEL_2 + MC_2 + ID_3;// + ID_3;
+}
 
 // below code copy-pasted
 interrupt(PORT1_VECTOR) Port_1(void) {
@@ -105,11 +128,9 @@ interrupt(PORT1_VECTOR) Port_1(void) {
 
     P1IE &= ~RXD;             // Disable RXD interrupt
     P1IFG &= ~RXD;            // Clear RXD IFG (interrupt flag)
-
-    TACTL = TASSEL_1 + MC_1;  // SMCLK, up mode
-    CCR1 = TAR;               // Initialize compare register
-    CCR0 += TIME_HALF_BIT;    // Set time till first bit
-    CCTL0 = OUTMOD1 + CCIE;   // Dissable TX and enable interrupts
+    
+    //TACTL |= TACLR; // reset the timer
+    TACTL |= TASSEL_2 | MC_2;
 
     RXByte = 0;               // Initialize RXByte
     BitCnt = 0x9;             // Load Bit counter, 8 bits + ST
@@ -118,29 +139,13 @@ interrupt(PORT1_VECTOR) Port_1(void) {
 // Timer A0 interrupt service routine
 interrupt(TIMERA0_VECTOR) Timer_A(void)
 {
-    if(!isReceiving)
+    if(isReceiving)
     {
-        CCR0 += TIME_BIT;            // Add Offset to CCR0  
-        if ( BitCnt == 0)            // If all bits TXed
-        {
-              TACTL = TASSEL_2;        // SMCLK, timer off (for power consumption)
-            CCTL0 &= ~ CCIE ;        // Disable interrupt
-        }
-        else
-        {
-            CCTL0 |=  OUTMOD2;        // Set TX bit to 0
-            if (TXByte & 0x01)
-                CCTL0 &= ~ OUTMOD2;    // If it should be 1, set it to 1
-            TXByte = TXByte >> 1;
-            BitCnt --;
-        }
-    }
-    else
-    {
+        P1OUT ^= BIT7;
         CCR0 += TIME_BIT;                // Add Offset to CCR0  
         if ( BitCnt == 0)
         {
-              TACTL = TASSEL_2;            // SMCLK, timer off (for power consumption)
+              TACTL |= TACLR;            // SMCLK, timer off (for power consumption)
             CCTL0 &= ~ CCIE ;            // Disable interrupt
             
             isReceiving = false;
@@ -154,7 +159,7 @@ interrupt(TIMERA0_VECTOR) Timer_A(void)
                 RXByte = RXByte >> 1;        // Remove start bit
                 RXByte &= 0xFF;            // Remove stop bit
                 hasReceived = true;
-                P2OUT ^= LED2;
+                P1OUT |= BIT7;
             }
               __bic_SR_register_on_exit(CPUOFF);    // Enable CPU so the main while loop continues
         }
@@ -166,46 +171,6 @@ interrupt(TIMERA0_VECTOR) Timer_A(void)
             BitCnt --;
         }
     }
-}
-
-/* transmits character from TXByte */
-void Transmit()
-{
-    /* Prevent async capture */
-
-#if 0
-    while (CCR0 != TAR)
-        /* current state of TA counter */
-        CCR0 = TAR;
-#endif
-
-    /* Re-implement timer capture in assembly */
-    asm(
-        "JMP 2f\n"
-        "1:\n"
-        "MOV &0x0170, &0x0172\n"
-        "2:\n"
-        "CMP &0x0170, &0x0172\n"
-        "JNZ 1b\n");
-
-    /* Some time till first bit */
-    CCR0 += TIME_BIT;
-
-    /* Load Bit counter, 8data + ST/SP */
-    BitCnt = 0xA;
-
-    /* Add mark stop bit to TXByte */
-    TXByte |= 0x100;
-
-    /* Add space start bit */
-    TXByte = TXByte << 1;
-
-    /* TXD = mark = idle */
-    CCTL0 =  CCIS0 + OUTMOD0 + CCIE;
-
-    /* Wait for TX completion, added short delay */
-    while (CCTL0 & CCIE)
-        delay(5);
 }
 
 /* Delay Routine from mspgcc help file */
