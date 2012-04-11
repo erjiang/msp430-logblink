@@ -81,16 +81,24 @@ void message_handler(unsigned int msg) {
             position = 0;
             break;
         case 'I':
+        case 'i':
             cmd = 'I';
+            position = 0;
             break;
         case 'O':
+        case 'o':
             cmd = 'O';
+            position = 0;
             break;
         case 'T':
+        case 't':
             cmd = 'T';
+            position = 0;
             break;
         case 'B':
+        case 'b':
             cmd = 'B';
+            position = 0;
             break;
         case '0':
             port = BIT0;
@@ -114,6 +122,8 @@ void message_handler(unsigned int msg) {
             break;
         default:
             position = 0;
+            TXByte = msg;
+            Transmit();
             break;
     }
 
