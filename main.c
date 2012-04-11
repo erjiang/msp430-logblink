@@ -32,6 +32,7 @@ bool hasReceived;		// Lets the program know when a byte is received
 
 // Function Definitions
 void Transmit(void);
+void message_handler(unsigned int);
 
 int main(void)
 {
@@ -44,7 +45,7 @@ int main(void)
 	P1DIR |= TXD;
 
     // setup LED1 and LED2
-    P1DIR |= BIT0 | BIT6;
+    P1DIR |= BIT0 | BIT3 | BIT4 | BIT5 | BIT7 | BIT6;
 
 	P1IES |= RXD;				// RXD Hi/lo edge interrupt
 	P1IFG &= ~RXD;				// Clear RXD (flag) before enabling interrupt
@@ -61,17 +62,82 @@ int main(void)
 		{
 			hasReceived = false;	// Clear the flag
             // toggle LED2 if we got 'y'
-            if(RXByte == 'y') {
-                P1OUT ^= BIT6;
-            }
-			TXByte = RXByte;	// Load the recieved byte into the byte to be transmitted
-			Transmit();
+            message_handler(RXByte);
 		}
 		if (~hasReceived)		// Loop again if another value has been received
     			__bis_SR_register(CPUOFF + GIE);        
 			// LPM0, the ADC interrupt will wake the processor up. This is so that it does not
 			//	endlessly loop when no value has been Received.
 	}
+}
+
+// recv's an 8-bit message
+void message_handler(unsigned int msg) {
+    static unsigned int position = 0;
+    static unsigned char cmd;
+    static unsigned char port;
+    switch (msg) {
+        case 'x':
+            position = 0;
+            break;
+        case 'I':
+            cmd = 'I';
+            break;
+        case 'O':
+            cmd = 'O';
+            break;
+        case 'T':
+            cmd = 'T';
+            break;
+        case 'B':
+            cmd = 'B';
+            break;
+        case '0':
+            port = BIT0;
+            position = 1;
+            break;
+        case '4':
+            port = BIT4;
+            position = 1;
+            break;
+        case '5':
+            port = BIT5;
+            position = 1;
+            break;
+        case '6':
+            port = BIT6;
+            position = 1;
+            break;
+        case '7':
+            port = BIT7;
+            position = 1;
+            break;
+        default:
+            position = 0;
+            break;
+    }
+
+    if(position) {
+        switch (cmd) {
+            case 'O':
+                P1OUT &= ~port;
+                TXByte = 'k';
+                break;
+            case 'I':
+                P1OUT |= port;
+                TXByte = 'k';
+                break;
+            case 'T':
+                P1OUT ^= port;
+                TXByte = 'k';
+                break;
+            default:
+                TXByte = 'x';
+                break;
+        }
+        Transmit();
+        position = 0;
+    }
 }
 
 // Function Transmits Character from TXByte 
