@@ -35,9 +35,9 @@ while 1:
     line = ssh.stdout.readline()
     if "GET " in line:
         print "get"
-        port.write("7")
+        port.write("4")
     elif "POST " in line:
         print "post"
         port.write("5")
     raw=port.read(port.inWaiting())
-    print raw
+    #print raw
